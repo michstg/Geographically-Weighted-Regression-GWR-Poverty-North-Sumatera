@@ -1,0 +1,279 @@
+---
+title: "GWR Model Sumatera Utara"
+author: "mich"
+date: '2022-06-06'
+output: html_document
+---
+
+```{r}
+install.packages("devtools")
+library(devtools)
+install_github("kassambara/easyGgplot2")
+install.packages("GWmodel")
+install.packages("nortest")
+install.packages("car")
+install.packages("spgwr")
+install.packages("spdep")
+install.packages("spatialreg")
+install.packages("gwrr")
+install.packages("skedastic")
+install.packages("sf")
+install.packages("mapview")
+```
+
+```{r}
+#Library Analysis
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(easyGgplot2)
+library(GWmodel)
+library(readxl)
+
+#Read Data
+data_penelitian <- read_excel("C:/Users/user/Downloads/data_penelitian.xlsx")
+data = data_penelitian
+View(data)
+```
+
+Y = Persentase Kemiskinan
+X1= Jumlah Penduduk
+X2= Tingkat Pengangguran Terbuka
+X3= Produk Domestik Regional Bruto
+X4= Indeks Pembangunan Manusia
+X5= Upah Minimum
+lon= Longitude
+lat= Latitude
+
+```{r check data type}
+str(data)
+```
+
+```{r Statistik Deskriptive}
+summary(data)
+```
+
+```{r Check Missing Value}
+#melihat nilai hilang
+colSums(is.na(data))
+which(is.na(data$x5))
+
+#mengisi nilai hilang dengan median
+data$x5[which(is.na(data$x5))] <- median(data$x5,na.rm=T)
+```
+
+
+```{r Plot EDA-1}
+par(mfrow=c(2,3))
+ploty =  plot(density(data$y)) 
+plotx1 =  plot(density(data$x1)) 
+plotx2 =  plot(density(data$x2)) 
+plotx3 =  plot(density(data$x3)) 
+plotx4 =  plot(density(data$x4)) 
+plotx5 =  plot(density(data$x5)) 
+```
+
+```{r Plot EDA-2}
+ploty <- ggplot(data = data, aes(x = factor(kabupaten_kota), y = y)) + geom_point(colour="red") +
+            theme(axis.text.x = element_text(angle = 45, size = 6, hjust = 1)) + ggtitle("Persentase Kemiskinan")+ labs(x="",y="")
+plotx1 <- ggplot(data = data, aes(x = factor(kabupaten_kota), y = x1)) + geom_point(colour="red") +
+            theme(axis.text.x = element_text(angle = 45, size = 6, hjust = 1)) + ggtitle("Jumlah penduduk")+ labs(x="",y="")
+plotx2 <- ggplot(data = data, aes(x = factor(kabupaten_kota), y = x2)) + geom_point(colour="red") +
+            theme(axis.text.x = element_text(angle = 45, size = 6, hjust = 1)) + ggtitle("Tingkat Pengangguran Terbuka")+ labs(x="",y="")
+plotx3 <- ggplot(data = data, aes(x = factor(kabupaten_kota), y = x3)) + geom_point(colour="red") +
+            theme(axis.text.x = element_text(angle = 45, size = 6, hjust = 1)) + ggtitle("Produk Domestik Regional Bruto")+ labs(x="",y="")
+plotx4 <- ggplot(data = data, aes(x = factor(kabupaten_kota), y = x4)) + geom_point(colour="red") +
+            theme(axis.text.x = element_text(angle = 45, size = 6, hjust = 1)) + ggtitle("Indeks Pembangunan Manusia")+ labs(x="",y="")
+plotx5 <- ggplot(data = data, aes(x = factor(kabupaten_kota), y = x5)) + geom_point(colour="red") +
+            theme(axis.text.x = element_text(angle = 45, size = 6, hjust = 1)) + ggtitle("Upah Minimum")+ labs(x="",y="")
+
+ggplot2.multiplot(ploty,plotx1,plotx2,plotx3,plotx4,plotx5, cols=3)
+```
+
+```{r Regresi Linier Berganda}
+#Model Regresi OLS
+model_linier = lm(formula = y~x1+x2+x3+x4+x5, data = data)
+sum = summary(model_linier)
+print(sum)
+cat("AIC = ",AIC(model_linier))
+cat("\nR2 = ",sum$r.squared)
+```
+UJI F
+H0 ; Tidak ada pengaruh x1,x2,x3,x4,x5 thdp y
+H1 ; Paling sedikit ada 1 variabel x mempengaruhi y
+Kesimpulan ; Fhitung > Ftabel | 7.436 > 3,285 | Tolak H0
+Kesimpulan ; Terdapat paling sedikit ada 1 variabel x mempengaruhi y
+
+Parameter Model
+Y =  91.16 - 0.0000003627 X1 + 0.2484 X2 + 0.00000006612 X3 - 0.9374 X4 - 0.000007949 X5
+
+```{r Uji Normalitas Kolmogrof Test}
+library(nortest)
+
+ks_y  = lillie.test(data$y)
+ks_x1 = lillie.test(data$x1)
+ks_x2 = lillie.test(data$x2)
+ks_x3 = lillie.test(data$x3)
+ks_x4 = lillie.test(data$x4)
+ks_x5 = lillie.test(data$x5)
+
+pval_ks_test = c(ks_y$p.value,ks_x1$p.value,ks_x2$p.value,ks_x3$p.value,ks_x4$p.value,ks_x5$p.value)
+variabel = colnames(data[,2:7])
+ks_result = data.frame(variabel,pval_ks_test)
+ks_result$pval_ks_test = format(ks_result$pval_ks_test,scientific = F)
+print(ks_result)
+```
+Asumsi ; Nilai signifikasi untuk nilai residualnya > 0.05 maka disimpulkan bahwa data berdistribusi normal.
+Kesimpulan ; Variabel dist normal (x2,x4,x5) | Variabel tidak dist normal (y,x1,x3)
+
+```{r Uji Normalitas Model Regresi}
+plot(model_linier) #Normal Q-Q
+lillie.test(model_linier[['residuals']])
+```
+
+Kesimpulan ; nilai Signifikasi untuk nilai residualnya > 0.05 maka disimpulkan model regresi telah memenuhi asumsi normalitas.
+
+```{r Uji Autokorelasi}
+library(car)
+dwt(model_linier)
+```
+
+dL = 1.12698 | dU = 1.81282 | d = 1.116587
+Deteksi Autokorelasi Positif: dl < d < du maka pengujian tidak meyakinkan atau tidak dapat disimpulkan
+Deteksi Autokorelasi Negatif: (4 – d) > dU maka tidak terdapat autokorelasi negatif
+
+
+```{r Uji Multikolinearitas}
+# VIF
+vif(model_linier)
+# Tolerance
+1/vif(model_linier)
+# rata-rata VIF
+mean(vif(model_linier))
+```
+
+Asumsi : Jika nilai VIF < 10 maka data tidak mengandung multikolinearitas
+Karena model tidak memiliki VIF lebih besar dari 10, jadi ini menunjukkan tidak ada multikolinearitas dalam data, juga rata-rata VIF adalah sekitar 2, jadi tidak ada bias dalam model.
+
+```{r Uji Multikolinearitas Plot}
+library(corrplot)
+cordata = data[,3:7]
+cordata = cor(cordata)
+corrplot(cordata,method = 'number')
+```
+
+```{r Uji Heterokedastisitas}
+library(skedastic)
+glejser(model_linier)
+```
+
+Karena nilai pvalue > 0,05 maka dapat dikatakan model persamaan regresi tidak mengalami heteroskedastisitas atau model regresi mengalami homoskedastisitas
+
+```{r Uji Heterogenitas Spasial}
+library(lmtest)
+
+bptest(model_linier)
+```
+Karena nilai pvalue < 0,05 maka dapat dikatakan model persamaan regresi terdapat heterogenitas spasial atau terdapat keragaman galat. Karena efek spasial pada data ini terpenuhi maka dapat digunakan model GWR.
+
+```{r}
+library(spdep)
+library(sf)
+library(mapview)
+
+df <- as_tibble(data)
+df_spasial <- st_as_sf(df, coords = c("lon", "lat"), crs = 4326)
+df_spasial_sp <- as(df_spasial, "Spatial")
+df_spasial_sp
+```
+```{r Uji Dependensi Spasial}
+coords <- coordinates(df_spasial_sp)
+bobot <- nb2listw(knn2nb(knearneigh(coords)))
+moran.test(df_spasial_sp$y, ww, alternative="greater")
+```
+
+Didapatkan p-value= 0.001204 karena nilai pvalue < 0,05 maka dapat tolak H0 berarti terbukti adanya autokorelasi spasial.
+
+------------------------------------------------------------------------------------------------------
+
+Kesimpulan :
+> Model regresi telah memenuhi asumsi normalitas
+> Model regresi tidak terkena autokorelasi
+> Model regresi tidak terkena multikolinearitas
+> Model regresi tidak terkena heterokedasititas
+> Model regresi terdapat heterogenitas spasial
+> Dalam data terdapat autokorelasi spasial
+
+------------------------------------------------------------------------------------------------------
+
+```{r Persentase Kemiskinan -Y}
+mapview(df_spasial[,c("kabupaten_kota","y")], zcol = "kabupaten_kota", cex="y", layer.name="kabupaten_kota", alpha.regions = 0.6)
+```
+
+```{r Jumlah Penduduk -X1}
+mapview(df_spasial[,c("kabupaten_kota","x1")], zcol = "kabupaten_kota", cex="x1", layer.name="kabupaten_kota", alpha.regions = 0.6)
+```
+
+```{r Tingkat Pengangguran Terbuka -X2}
+mapview(df_spasial[,c("kabupaten_kota","x2")], zcol = "kabupaten_kota", cex="x2", layer.name="kabupaten_kota", alpha.regions = 0.6)
+```
+
+```{r Produk Domestik Regional Bruto -X3}
+mapview(df_spasial[,c("kabupaten_kota","x3")], zcol = "kabupaten_kota", cex="x3", layer.name="kabupaten_kota", alpha.regions = 0.6)
+```
+
+```{r Indeks Pembangunan Manusia -X4}
+mapview(df_spasial[,c("kabupaten_kota","x4")], zcol = "kabupaten_kota", cex="x4", layer.name="kabupaten_kota", alpha.regions = 0.6)
+```
+
+```{r Upah Minimum -X5}
+mapview(df_spasial[,c("kabupaten_kota","x5")], zcol = "kabupaten_kota", cex="x5", layer.name="kabupaten_kota", alpha.regions = 0.6)
+```
+
+```{r Nilai Euclidean antar titik wilayah}
+library(GWmodel)
+
+euclidean <- gw.dist(coords)
+View(euclidean)
+```
+
+
+```{r Nilai Bandwidth Optimal}
+library(spgwr)
+library(spdep)
+library(spatialreg)
+library(gwrr)
+
+#pembobot GWR yang digunakan adalah pembobot kernel gaussian
+gwr_band <-gwr.sel(y~x1+x2+x3+x4+x5, df_spasial_sp, gweight = gwr.Gauss)
+gwr_band #nilai optimal
+```
+
+```{r Matriks Pembobot Lokasi}
+bobot <- knn2nb(knearneigh(coords,k=4))
+matriks_bobot <- nb2mat(bobot, zero.policy=TRUE)
+rownames(matriks_bobot) = df$kabupaten_kota
+colnames(matriks_bobot) = df$kabupaten_kota
+View(matriks_bobot)
+```
+
+```{r Estimasi Parameter GWR}
+gwr.fit <- gwr(y~x1+x2+x3+x4+x5, data = df_spasial_sp, bandwidth = gwr_band, se.fit=T, hatmatrix=T, gweight = gwr.Gauss)
+gwr.fit
+```
+
+```{r Evaluasi Model}
+model = c("OLS","GWR")
+R2 = c(sum$r.squared,0.7110765)
+AIC = c(AIC(model_linier),gwr.fit$results$AICh)
+
+evaluasi = data.frame(model,R2,AIC)
+evaluasi
+```
+
+```{r Output model GWR}
+df_gwr = as.data.frame(gwr.fit$SDF)
+rownames(df_gwr) = df_spasial$kabupaten_kota
+View(df_gwr)
+```
+
