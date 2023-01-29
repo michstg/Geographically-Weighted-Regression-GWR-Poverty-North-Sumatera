@@ -1,6 +1,7 @@
 # Geographically Weighted Regression GWR Using R Programming
 Dataset =  Data Kemiskinan di Provinsi Sumatera Utara tahun 2018
 
+* Assumption Hypotesis Testing
 * Compared Model OLS - GWR with classical assumption and Exploratory Data Analysis
 * Metrics Evaluation Model is R-Squared and AIC
 
