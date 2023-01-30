@@ -17,5 +17,6 @@ Independet Variables which is
 
 GWR = 
 * Pembobotan Kernel Gaussian
-* Bandwith (CV Score)
-* Map Visualization
+* Bandwith optimum = 195.1136
+* CV Score = 657.5274
+* Map Visualization (GGMAP PLOT)
